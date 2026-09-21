@@ -1,29 +1,48 @@
 name: Generate Streak Stats
+
 on:
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   update-streak:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Fetch Streak Stats
         run: |
           curl -fL --retry 3 --retry-delay 5 \
             "https://streak-stats.demolab.com?user=${{ github.repository_owner }}&theme=dark&hide_border=true&date_format=j%20M%5B%20Y%5D&ring=00d4ff&fire=ff6b35&currStreakLabel=00d4ff&sideLabels=00d4ff&background=0a0e27" \
             -o github-streak-stats.svg
+
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
+
           git add github-streak-stats.svg
+
           if git diff --staged --quiet; then
             echo "No changes"
-          else
-            git commit -m "Update Streak Stats [skip ci]"
-            git push
+            exit 0
           fi
+
+          git commit -m "Update Streak Stats [skip ci]"
+
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            echo "Push failed, retrying in 5 seconds..."
+            sleep 5
+          done
+
+          echo "Failed to push after 5 attempts"
+          exit 1
